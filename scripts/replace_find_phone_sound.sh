@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PATCH_SCRIPT="$ROOT_DIR/scripts/patch_find_phone_apk.py"
 SMALI_PATCH_SCRIPT="$ROOT_DIR/scripts/patch_widgetprovider_lazyload_smali.py"
+PAIRING_PATCH_SCRIPT="$ROOT_DIR/scripts/patch_pairing_retry_smali.py"
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
   echo "Usage: $0 <source-apk> <output-apk> <input-audio> [second-audio]"
@@ -23,6 +24,9 @@ TMP_INTL="$TMP_DIR/find_phone_intl.ogg"
 TMP_CLASSES="$TMP_DIR/classes.dex"
 TMP_PATCHED_CLASSES="$TMP_DIR/classes.patched.dex"
 TMP_SMALI_DIR="$TMP_DIR/classes-smali"
+TMP_CLASSES3="$TMP_DIR/classes3.dex"
+TMP_PATCHED_CLASSES3="$TMP_DIR/classes3.patched.dex"
+TMP_SMALI3_DIR="$TMP_DIR/classes3-smali"
 
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -62,9 +66,13 @@ patch_widgetprovider_startup() {
   fi
 
   unzip -p "$SOURCE_APK" classes.dex > "$TMP_CLASSES"
+  unzip -p "$SOURCE_APK" classes3.dex > "$TMP_CLASSES3"
   baksmali disassemble --api 34 -j 4 "$TMP_CLASSES" -o "$TMP_SMALI_DIR"
+  baksmali disassemble --api 34 -j 4 "$TMP_CLASSES3" -o "$TMP_SMALI3_DIR"
   python3 "$SMALI_PATCH_SCRIPT"     "$TMP_SMALI_DIR/health/compact/a/HealthApplicationLazyLoadMgr.smali"
+  python3 "$PAIRING_PATCH_SCRIPT"     "$TMP_SMALI_DIR/lja.smali"     "$TMP_SMALI3_DIR/cfw.smali"     "$TMP_SMALI3_DIR/cfy.smali"     "${TMP_SMALI3_DIR}/cfy\$e.smali"
   smali assemble --api 34 -j 4 "$TMP_SMALI_DIR" -o "$TMP_PATCHED_CLASSES"
+  smali assemble --api 34 -j 4 "$TMP_SMALI3_DIR" -o "$TMP_PATCHED_CLASSES3"
 }
 
 if [[ ! -f "$SOURCE_APK" ]]; then
@@ -82,8 +90,13 @@ if [[ ! -f "$SMALI_PATCH_SCRIPT" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$PAIRING_PATCH_SCRIPT" ]]; then
+  echo "Pairing smali patch script not found: $PAIRING_PATCH_SCRIPT" >&2
+  exit 1
+fi
+
 write_ogg "$INPUT_ZH" "$TMP_ZH"
 write_ogg "$INPUT_INTL" "$TMP_INTL"
 patch_widgetprovider_startup
 
-python3 "$PATCH_SCRIPT"   --source-apk "$SOURCE_APK"   --output-apk "$OUTPUT_APK"   --zh-audio "$TMP_ZH"   --intl-audio "$TMP_INTL"   --classes-dex "$TMP_PATCHED_CLASSES"
+python3 "$PATCH_SCRIPT"   --source-apk "$SOURCE_APK"   --output-apk "$OUTPUT_APK"   --zh-audio "$TMP_ZH"   --intl-audio "$TMP_INTL"   --classes-dex "$TMP_PATCHED_CLASSES"   --classes3-dex "$TMP_PATCHED_CLASSES3"

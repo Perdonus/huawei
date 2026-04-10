@@ -14,6 +14,7 @@ ENTRY_CANDIDATES = {
 }
 
 DEX_ENTRY = "classes.dex"
+DEX3_ENTRY = "classes3.dex"
 SIGNATURE_SUFFIXES = (".RSA", ".DSA", ".EC", ".SF")
 
 
@@ -26,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--zh-audio", required=True, type=Path)
     parser.add_argument("--intl-audio", required=True, type=Path)
     parser.add_argument("--classes-dex", type=Path)
+    parser.add_argument("--classes3-dex", type=Path)
     return parser.parse_args()
 
 
@@ -104,14 +106,21 @@ def main() -> int:
 
     zh_bytes = args.zh_audio.read_bytes()
     intl_bytes = args.intl_audio.read_bytes()
-    classes_dex_bytes = None
+    dex_replacements: dict[str, bytes] = {}
 
     if args.classes_dex is not None:
         if not args.classes_dex.is_file():
             print(f"Patched classes.dex not found: {args.classes_dex}", file=sys.stderr)
             return 1
 
-        classes_dex_bytes = args.classes_dex.read_bytes()
+        dex_replacements[DEX_ENTRY] = args.classes_dex.read_bytes()
+
+    if args.classes3_dex is not None:
+        if not args.classes3_dex.is_file():
+            print(f"Patched classes3.dex not found: {args.classes3_dex}", file=sys.stderr)
+            return 1
+
+        dex_replacements[DEX3_ENTRY] = args.classes3_dex.read_bytes()
 
     args.output_apk.parent.mkdir(parents=True, exist_ok=True)
 
@@ -120,7 +129,7 @@ def main() -> int:
         replacements = resolve_targets(entry_names)
         replaced_entries: list[str] = []
         stripped_entries: list[str] = []
-        replaced_classes_dex = False
+        replaced_dex_entries: set[str] = set()
 
         with tempfile.NamedTemporaryFile(
             prefix=f"{args.output_apk.name}.",
@@ -137,10 +146,10 @@ def main() -> int:
                         stripped_entries.append(source_info.filename)
                         continue
 
-                    if classes_dex_bytes is not None and source_info.filename == DEX_ENTRY:
-                        payload = classes_dex_bytes
+                    if source_info.filename in dex_replacements:
+                        payload = dex_replacements[source_info.filename]
                         replaced_entries.append(source_info.filename)
-                        replaced_classes_dex = True
+                        replaced_dex_entries.add(source_info.filename)
                     elif source_info.filename in replacements:
                         locale_key = replacements[source_info.filename]
                         payload = zh_bytes if locale_key == "zh" else intl_bytes
@@ -155,8 +164,11 @@ def main() -> int:
             temp_path.unlink(missing_ok=True)
             raise
 
-    if classes_dex_bytes is not None and not replaced_classes_dex:
-        print(f"Missing {DEX_ENTRY} entry in APK.", file=sys.stderr)
+    missing_dex_entries = sorted(set(dex_replacements) - replaced_dex_entries)
+    if missing_dex_entries:
+        print("Missing DEX entries in APK:", file=sys.stderr)
+        for entry in missing_dex_entries:
+            print(f"  {entry}", file=sys.stderr)
         args.output_apk.unlink(missing_ok=True)
         return 1
 
