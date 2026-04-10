@@ -41,7 +41,7 @@ if [[ -z "$TARGET_ZH" || -z "$TARGET_INTL" ]]; then
   echo "  $RAW_DIR/2131886230(.ext) or $RAW_DIR/xjm.ogg" >&2
   echo "  $RAW_DIR/2131886231(.ext) or $RAW_DIR/xjn.ogg" >&2
   echo "Available raw files near expected names:" >&2
-  ls -1 "$RAW_DIR" | sort | rg '^(213188623[0-4]|xj[mn]\.ogg|xj[mn])$' >&2 || true
+  ls -1 "$RAW_DIR" | sort | grep -E '^(213188623[0-4]|xj[mn](\.ogg)?)$' >&2 || true
   exit 1
 fi
 

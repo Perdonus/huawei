@@ -33,6 +33,7 @@ jobs:
       KEYSTORE_PASS: android
       KEY_PASS: android
       BUILD_TOOLS_VERSION: 35.0.0
+      APKTOOL_URL: https://github.com/iBotPeaches/Apktool/releases/download/v2.7.0/apktool_2.7.0.jar
 
     steps:
       - name: Checkout repository
@@ -57,9 +58,7 @@ jobs:
       - name: Install apktool
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -o /tmp/apktool-release.json
-          APKTOOL_JAR_URL="$(python3 -c 'import json; data=json.load(open("/tmp/apktool-release.json", "r", encoding="utf-8")); print(next(asset["browser_download_url"] for asset in data.get("assets", []) if asset.get("browser_download_url", "").endswith(".jar")))')"
-          curl -L --fail "$APKTOOL_JAR_URL" -o "$HOME/.local/bin/apktool.jar"
+          curl -L --fail "$APKTOOL_URL" -o "$HOME/.local/bin/apktool.jar"
           printf '%s\n' '#!/usr/bin/env bash' 'exec java -jar "$HOME/.local/bin/apktool.jar" "$@"' > "$HOME/.local/bin/apktool"
           chmod +x "$HOME/.local/bin/apktool"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
