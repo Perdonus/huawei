@@ -15,14 +15,14 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 fi
 
 resolve_target() {
-  local stem="$1"
+  local numeric_stem="$1"
+  local fallback_name="$2"
   local candidate=""
 
   shopt -s nullglob
-  for candidate in "$RAW_DIR/$stem" "$RAW_DIR/$stem".*; do
+  for candidate in     "$RAW_DIR/$numeric_stem"     "$RAW_DIR/$numeric_stem".*     "$RAW_DIR/$fallback_name"     "$RAW_DIR/$fallback_name".*; do
     if [[ -f "$candidate" ]]; then
-      printf '%s
-' "$candidate"
+      echo "$candidate"
       shopt -u nullglob
       return 0
     fi
@@ -31,17 +31,17 @@ resolve_target() {
   return 1
 }
 
-TARGET_ZH="$(resolve_target 2131886230 || true)"
-TARGET_INTL="$(resolve_target 2131886231 || true)"
+TARGET_ZH="$(resolve_target 2131886230 xjm.ogg || true)"
+TARGET_INTL="$(resolve_target 2131886231 xjn.ogg || true)"
 
 mkdir -p "$BACKUP_DIR"
 
 if [[ -z "$TARGET_ZH" || -z "$TARGET_INTL" ]]; then
-  echo "Find Phone target files are missing. Expected resource stems:" >&2
-  echo "  $RAW_DIR/2131886230" >&2
-  echo "  $RAW_DIR/2131886231" >&2
-  echo "Available files near expected ids:" >&2
-  ls -1 "$RAW_DIR" | sort | awk '$0 >= "2131886227" && $0 <= "2131886234zz"' >&2 || true
+  echo "Find Phone target files are missing. Expected candidates included:" >&2
+  echo "  $RAW_DIR/2131886230(.ext) or $RAW_DIR/xjm.ogg" >&2
+  echo "  $RAW_DIR/2131886231(.ext) or $RAW_DIR/xjn.ogg" >&2
+  echo "Available raw files near expected names:" >&2
+  ls -1 "$RAW_DIR" | sort | rg '^(213188623[0-4]|xj[mn]\.ogg|xj[mn])$' >&2 || true
   exit 1
 fi
 
