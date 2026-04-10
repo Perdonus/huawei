@@ -67,8 +67,8 @@ patch_widgetprovider_startup() {
 
   unzip -p "$SOURCE_APK" classes.dex > "$TMP_CLASSES"
   unzip -p "$SOURCE_APK" classes3.dex > "$TMP_CLASSES3"
-  baksmali disassemble --api 34 -j 4 "$TMP_CLASSES" -o "$TMP_SMALI_DIR"
-  baksmali disassemble --api 34 -j 4 "$TMP_CLASSES3" -o "$TMP_SMALI3_DIR"
+  baksmali disassemble --api 34 -j 4 -l --sequential-labels "$TMP_CLASSES" -o "$TMP_SMALI_DIR"
+  baksmali disassemble --api 34 -j 4 -l --sequential-labels "$TMP_CLASSES3" -o "$TMP_SMALI3_DIR"
   python3 "$SMALI_PATCH_SCRIPT"     "$TMP_SMALI_DIR/health/compact/a/HealthApplicationLazyLoadMgr.smali"
   python3 "$PAIRING_PATCH_SCRIPT"     "$TMP_SMALI_DIR/lja.smali"     "$TMP_SMALI3_DIR/cfw.smali"     "$TMP_SMALI3_DIR/cfy.smali"     "${TMP_SMALI3_DIR}/cfy\$e.smali"
   smali assemble --api 34 -j 4 "$TMP_SMALI_DIR" -o "$TMP_PATCHED_CLASSES"
