@@ -1,0 +1,14 @@
+# Local build and reverse-engineering artifacts
+build/
+backups/
+input/
+reports/
+tmp/
+work/
+
+# Android signing and packaging outputs
+*.apk
+*.apks
+*.idsig
+*.keystore
+*.jks

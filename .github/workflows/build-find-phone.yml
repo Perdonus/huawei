@@ -1,0 +1,125 @@
+name: Build Huawei Health Find Phone Mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build-find-phone.yml
+      - AGENTS.md
+      - assets/custom/find_phone.mp3
+      - notes/**
+      - scripts/**
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APK_URL: https://trashbox.ru/files20/2461088_b0a65e/com.huawei.health-1600102310_hw.apk
+      APK_NAME: com.huawei.health-16.1.2.310.apk
+      SOURCE_SHA256: 5b7d162abfd2979108672c2b11b063f0c848f4fe60070f41df2e8e26464e54b8
+      DECOMPILED_DIR: work/huawei_health_apktool
+      UNSIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-unsigned.apk
+      ALIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-aligned.apk
+      SIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-signed.apk
+      KEYSTORE_PATH: build/temp-signing.keystore
+      KEY_ALIAS: github-actions
+      KEYSTORE_PASS: android
+      KEY_PASS: android
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apktool apksigner ffmpeg zipalign
+
+      - name: Download original APK
+        run: |
+          mkdir -p build input/original
+          curl -L --fail --retry 3 --retry-delay 5 \
+            "$APK_URL" \
+            -o "input/original/$APK_NAME"
+          echo "$SOURCE_SHA256  input/original/$APK_NAME" | sha256sum -c -
+          sha256sum "input/original/$APK_NAME" | tee build/source-apk.sha256
+
+      - name: Decompile APK
+        run: |
+          apktool d -f "input/original/$APK_NAME" -o "$DECOMPILED_DIR"
+
+      - name: Replace Find Phone audio
+        run: |
+          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.mp3
+
+      - name: Record replacement audio details
+        run: |
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate \
+            -of default=noprint_wrappers=1 \
+            "$DECOMPILED_DIR/res/raw/2131886230.ogg" | tee build/find_phone_zh.txt
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate \
+            -of default=noprint_wrappers=1 \
+            "$DECOMPILED_DIR/res/raw/2131886231.ogg" | tee build/find_phone_intl.txt
+
+      - name: Build unsigned APK
+        run: |
+          bash scripts/build_huawei_health.sh
+
+      - name: Align APK
+        run: |
+          zipalign -f -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+
+      - name: Generate temporary signing key
+        run: |
+          keytool -genkeypair \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass "$KEYSTORE_PASS" \
+            -keypass "$KEY_PASS" \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=GitHub Actions, OU=Automation, O=Perdonus, L=Internet, S=Internet, C=US"
+
+      - name: Sign APK
+        run: |
+          apksigner sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASS" \
+            --key-pass pass:"$KEY_PASS" \
+            --out "$SIGNED_APK" \
+            "$ALIGNED_APK"
+
+      - name: Verify signed APK
+        run: |
+          apksigner verify --verbose "$SIGNED_APK"
+          sha256sum "$UNSIGNED_APK" "$ALIGNED_APK" "$SIGNED_APK" > build/SHA256SUMS.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: huawei-health-find-phone-mod
+          if-no-files-found: error
+          path: |
+            build/com.huawei.health-16.1.2.310-rebuilt-unsigned.apk
+            build/com.huawei.health-16.1.2.310-rebuilt-aligned.apk
+            build/com.huawei.health-16.1.2.310-rebuilt-signed.apk
+            build/SHA256SUMS.txt
+            build/source-apk.sha256
+            build/find_phone_zh.txt
+            build/find_phone_intl.txt
