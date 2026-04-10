@@ -115,11 +115,9 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: huawei-health-find-phone-mod
+          name: huawei-health-find-phone-mod-signed
           if-no-files-found: error
           path: |
-            build/com.huawei.health-16.1.2.310-rebuilt-unsigned.apk
-            build/com.huawei.health-16.1.2.310-rebuilt-aligned.apk
             build/com.huawei.health-16.1.2.310-rebuilt-signed.apk
             build/SHA256SUMS.txt
             build/source-apk.sha256
