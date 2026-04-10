@@ -9,6 +9,7 @@ on:
       - .github/workflows/build-find-phone.yml
       - AGENTS.md
       - assets/custom/find_phone.mp3
+      - assets/custom/find_phone.ogg
       - notes/**
       - scripts/**
 
@@ -31,6 +32,7 @@ jobs:
       KEY_ALIAS: github-actions
       KEYSTORE_PASS: android
       KEY_PASS: android
+      BUILD_TOOLS_VERSION: 35.0.0
 
     steps:
       - name: Checkout repository
@@ -42,10 +44,26 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install dependencies
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y apktool apksigner ffmpeg zipalign
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "build-tools;$BUILD_TOOLS_VERSION"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION" >> "$GITHUB_PATH"
+
+      - name: Install apktool
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -o /tmp/apktool-release.json
+          APKTOOL_JAR_URL="$(python3 -c 'import json; data=json.load(open("/tmp/apktool-release.json", "r", encoding="utf-8")); print(next(asset["browser_download_url"] for asset in data.get("assets", []) if asset.get("browser_download_url", "").endswith(".jar")))')"
+          curl -L --fail "$APKTOOL_JAR_URL" -o "$HOME/.local/bin/apktool.jar"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec java -jar "$HOME/.local/bin/apktool.jar" "$@"' > "$HOME/.local/bin/apktool"
+          chmod +x "$HOME/.local/bin/apktool"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/apktool" --version
 
       - name: Download original APK
         run: |
@@ -62,18 +80,12 @@ jobs:
 
       - name: Replace Find Phone audio
         run: |
-          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.mp3
+          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.ogg
 
-      - name: Record replacement audio details
+      - name: Record replacement audio checksums
         run: |
-          ffprobe -v error \
-            -show_entries format=duration,size,bit_rate \
-            -of default=noprint_wrappers=1 \
-            "$DECOMPILED_DIR/res/raw/2131886230.ogg" | tee build/find_phone_zh.txt
-          ffprobe -v error \
-            -show_entries format=duration,size,bit_rate \
-            -of default=noprint_wrappers=1 \
-            "$DECOMPILED_DIR/res/raw/2131886231.ogg" | tee build/find_phone_intl.txt
+          sha256sum "$DECOMPILED_DIR/res/raw/2131886230.ogg" > build/find_phone_zh.txt
+          sha256sum "$DECOMPILED_DIR/res/raw/2131886231.ogg" > build/find_phone_intl.txt
 
       - name: Build unsigned APK
         run: |

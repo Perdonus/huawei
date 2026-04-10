@@ -12,13 +12,8 @@ TARGET_INTL="$RAW_DIR/2131886231.ogg"
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo "Usage: $0 <input-audio> [second-audio]"
   echo
-  echo "If only one input is provided, it is converted and written to both OGG targets."
+  echo "If only one input is provided, it is written to both OGG targets."
   echo "If two inputs are provided, the first replaces zh and the second replaces non-zh."
-  exit 1
-fi
-
-if ! command -v ffmpeg >/dev/null 2>&1; then
-  echo "ffmpeg is required but not found in PATH." >&2
   exit 1
 fi
 
@@ -34,7 +29,7 @@ fi
 cp -f "$TARGET_ZH" "$BACKUP_DIR/2131886230.ogg.bak"
 cp -f "$TARGET_INTL" "$BACKUP_DIR/2131886231.ogg.bak"
 
-convert_to_ogg() {
+write_ogg() {
   local input_file="$1"
   local output_file="$2"
 
@@ -43,19 +38,31 @@ convert_to_ogg() {
     exit 1
   fi
 
-  ffmpeg -y -i "$input_file" \
-    -vn \
-    -c:a libvorbis \
-    -q:a 5 \
-    "$output_file" >/dev/null 2>&1
+  case "${input_file##*.}" in
+    ogg|OGG)
+      cp -f "$input_file" "$output_file"
+      ;;
+    *)
+      if ! command -v ffmpeg >/dev/null 2>&1; then
+        echo "ffmpeg is required to convert non-OGG input files." >&2
+        exit 1
+      fi
+
+      ffmpeg -y -i "$input_file" \
+        -vn \
+        -c:a libvorbis \
+        -q:a 5 \
+        "$output_file" >/dev/null 2>&1
+      ;;
+  esac
 }
 
-convert_to_ogg "$1" "$TARGET_ZH"
+write_ogg "$1" "$TARGET_ZH"
 
 if [[ $# -eq 2 ]]; then
-  convert_to_ogg "$2" "$TARGET_INTL"
+  write_ogg "$2" "$TARGET_INTL"
 else
-  convert_to_ogg "$1" "$TARGET_INTL"
+  write_ogg "$1" "$TARGET_INTL"
 fi
 
 echo "Updated:"
