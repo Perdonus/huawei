@@ -13,6 +13,7 @@ ENTRY_CANDIDATES = {
     "intl": ("res/raw/xjn.ogg", "res/raw/2131886231.ogg"),
 }
 
+DEX_ENTRY = "classes.dex"
 SIGNATURE_SUFFIXES = (".RSA", ".DSA", ".EC", ".SF")
 
 
@@ -24,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-apk", required=True, type=Path)
     parser.add_argument("--zh-audio", required=True, type=Path)
     parser.add_argument("--intl-audio", required=True, type=Path)
+    parser.add_argument("--classes-dex", type=Path)
     return parser.parse_args()
 
 
@@ -102,6 +104,14 @@ def main() -> int:
 
     zh_bytes = args.zh_audio.read_bytes()
     intl_bytes = args.intl_audio.read_bytes()
+    classes_dex_bytes = None
+
+    if args.classes_dex is not None:
+        if not args.classes_dex.is_file():
+            print(f"Patched classes.dex not found: {args.classes_dex}", file=sys.stderr)
+            return 1
+
+        classes_dex_bytes = args.classes_dex.read_bytes()
 
     args.output_apk.parent.mkdir(parents=True, exist_ok=True)
 
@@ -110,6 +120,7 @@ def main() -> int:
         replacements = resolve_targets(entry_names)
         replaced_entries: list[str] = []
         stripped_entries: list[str] = []
+        replaced_classes_dex = False
 
         with tempfile.NamedTemporaryFile(
             prefix=f"{args.output_apk.name}.",
@@ -126,7 +137,11 @@ def main() -> int:
                         stripped_entries.append(source_info.filename)
                         continue
 
-                    if source_info.filename in replacements:
+                    if classes_dex_bytes is not None and source_info.filename == DEX_ENTRY:
+                        payload = classes_dex_bytes
+                        replaced_entries.append(source_info.filename)
+                        replaced_classes_dex = True
+                    elif source_info.filename in replacements:
                         locale_key = replacements[source_info.filename]
                         payload = zh_bytes if locale_key == "zh" else intl_bytes
                         replaced_entries.append(source_info.filename)
@@ -139,6 +154,11 @@ def main() -> int:
         except Exception:
             temp_path.unlink(missing_ok=True)
             raise
+
+    if classes_dex_bytes is not None and not replaced_classes_dex:
+        print(f"Missing {DEX_ENTRY} entry in APK.", file=sys.stderr)
+        args.output_apk.unlink(missing_ok=True)
+        return 1
 
     print("Patched APK:")
     print(f"  source: {args.source_apk}")

@@ -46,6 +46,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install APK patch tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apktool ffmpeg
+
       - name: Install Android build tools
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -60,7 +65,7 @@ jobs:
           echo "$SOURCE_SHA256  input/original/$APK_NAME" | sha256sum -c -
           sha256sum "input/original/$APK_NAME" | tee build/source-apk.sha256
 
-      - name: Replace Find Phone audio
+      - name: Patch APK payload
         run: |
           set -o pipefail
           bash scripts/replace_find_phone_sound.sh \
