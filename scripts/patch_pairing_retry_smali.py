@@ -628,9 +628,11 @@ def patch_file(path: Path, patches: tuple[tuple[str, str, str], ...]) -> None:
 def main() -> int:
     args = parse_args()
     patch_file(args.lja_smali, ((LJA_TARGET, LJA_REPLACEMENT, "KillPhoneServiceManager no-op"),))
-    patch_file(args.cfw_smali, CFW_PATCHES)
-    patch_file(args.cfy_smali, CFY_PATCHES)
-    patch_file(args.cfy_error_smali, CFYE_PATCHES)
+    # The broader HiChain retry hooks changed pairing behavior too aggressively.
+    # Keep the safer phone-service no-op only until we have fresh device logs.
+    ensure_file(args.cfw_smali)
+    ensure_file(args.cfy_smali)
+    ensure_file(args.cfy_error_smali)
     return 0
 
 
