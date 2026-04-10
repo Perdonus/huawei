@@ -6,9 +6,6 @@ DECOMPILED_DIR="$ROOT_DIR/work/huawei_health_apktool"
 RAW_DIR="$DECOMPILED_DIR/res/raw"
 BACKUP_DIR="$ROOT_DIR/backups/find_phone"
 
-TARGET_ZH="$RAW_DIR/2131886230.ogg"
-TARGET_INTL="$RAW_DIR/2131886231.ogg"
-
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo "Usage: $0 <input-audio> [second-audio]"
   echo
@@ -17,17 +14,42 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
   exit 1
 fi
 
+resolve_target() {
+  local stem="$1"
+  local candidate=""
+
+  shopt -s nullglob
+  for candidate in "$RAW_DIR/$stem" "$RAW_DIR/$stem".*; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s
+' "$candidate"
+      shopt -u nullglob
+      return 0
+    fi
+  done
+  shopt -u nullglob
+  return 1
+}
+
+TARGET_ZH="$(resolve_target 2131886230 || true)"
+TARGET_INTL="$(resolve_target 2131886231 || true)"
+
 mkdir -p "$BACKUP_DIR"
 
-if [[ ! -f "$TARGET_ZH" || ! -f "$TARGET_INTL" ]]; then
-  echo "Find Phone target files are missing. Expected:" >&2
-  echo "  $TARGET_ZH" >&2
-  echo "  $TARGET_INTL" >&2
+if [[ -z "$TARGET_ZH" || -z "$TARGET_INTL" ]]; then
+  echo "Find Phone target files are missing. Expected resource stems:" >&2
+  echo "  $RAW_DIR/2131886230" >&2
+  echo "  $RAW_DIR/2131886231" >&2
+  echo "Available files near expected ids:" >&2
+  ls -1 "$RAW_DIR" | sort | awk '$0 >= "2131886227" && $0 <= "2131886234zz"' >&2 || true
   exit 1
 fi
 
-cp -f "$TARGET_ZH" "$BACKUP_DIR/2131886230.ogg.bak"
-cp -f "$TARGET_INTL" "$BACKUP_DIR/2131886231.ogg.bak"
+BACKUP_ZH="$BACKUP_DIR/$(basename "$TARGET_ZH").bak"
+BACKUP_INTL="$BACKUP_DIR/$(basename "$TARGET_INTL").bak"
+
+cp -f "$TARGET_ZH" "$BACKUP_ZH"
+cp -f "$TARGET_INTL" "$BACKUP_INTL"
 
 write_ogg() {
   local input_file="$1"
@@ -48,11 +70,7 @@ write_ogg() {
         exit 1
       fi
 
-      ffmpeg -y -i "$input_file" \
-        -vn \
-        -c:a libvorbis \
-        -q:a 5 \
-        "$output_file" >/dev/null 2>&1
+      ffmpeg -y -i "$input_file"         -vn         -c:a libvorbis         -q:a 5         "$output_file" >/dev/null 2>&1
       ;;
   esac
 }
@@ -70,5 +88,5 @@ echo "  $TARGET_ZH"
 echo "  $TARGET_INTL"
 echo
 echo "Backups:"
-echo "  $BACKUP_DIR/2131886230.ogg.bak"
-echo "  $BACKUP_DIR/2131886231.ogg.bak"
+echo "  $BACKUP_ZH"
+echo "  $BACKUP_INTL"

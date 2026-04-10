@@ -68,9 +68,7 @@ jobs:
       - name: Download original APK
         run: |
           mkdir -p build input/original
-          curl -L --fail --retry 3 --retry-delay 5 \
-            "$APK_URL" \
-            -o "input/original/$APK_NAME"
+          curl -L --fail --retry 3 --retry-delay 5             "$APK_URL"             -o "input/original/$APK_NAME"
           echo "$SOURCE_SHA256  input/original/$APK_NAME" | sha256sum -c -
           sha256sum "input/original/$APK_NAME" | tee build/source-apk.sha256
 
@@ -82,11 +80,6 @@ jobs:
         run: |
           bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.ogg
 
-      - name: Record replacement audio checksums
-        run: |
-          sha256sum "$DECOMPILED_DIR/res/raw/2131886230.ogg" > build/find_phone_zh.txt
-          sha256sum "$DECOMPILED_DIR/res/raw/2131886231.ogg" > build/find_phone_intl.txt
-
       - name: Build unsigned APK
         run: |
           bash scripts/build_huawei_health.sh
@@ -97,25 +90,11 @@ jobs:
 
       - name: Generate temporary signing key
         run: |
-          keytool -genkeypair \
-            -keystore "$KEYSTORE_PATH" \
-            -storepass "$KEYSTORE_PASS" \
-            -keypass "$KEY_PASS" \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=GitHub Actions, OU=Automation, O=Perdonus, L=Internet, S=Internet, C=US"
+          keytool -genkeypair             -keystore "$KEYSTORE_PATH"             -storepass "$KEYSTORE_PASS"             -keypass "$KEY_PASS"             -alias "$KEY_ALIAS"             -keyalg RSA             -keysize 2048             -validity 10000             -dname "CN=GitHub Actions, OU=Automation, O=Perdonus, L=Internet, S=Internet, C=US"
 
       - name: Sign APK
         run: |
-          apksigner sign \
-            --ks "$KEYSTORE_PATH" \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass pass:"$KEYSTORE_PASS" \
-            --key-pass pass:"$KEY_PASS" \
-            --out "$SIGNED_APK" \
-            "$ALIGNED_APK"
+          apksigner sign             --ks "$KEYSTORE_PATH"             --ks-key-alias "$KEY_ALIAS"             --ks-pass pass:"$KEYSTORE_PASS"             --key-pass pass:"$KEY_PASS"             --out "$SIGNED_APK"             "$ALIGNED_APK"
 
       - name: Verify signed APK
         run: |
@@ -133,5 +112,3 @@ jobs:
             build/com.huawei.health-16.1.2.310-rebuilt-signed.apk
             build/SHA256SUMS.txt
             build/source-apk.sha256
-            build/find_phone_zh.txt
-            build/find_phone_intl.txt
