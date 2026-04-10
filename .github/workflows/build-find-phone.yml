@@ -73,15 +73,18 @@ jobs:
 
       - name: Decompile APK
         run: |
-          apktool d -f "input/original/$APK_NAME" -o "$DECOMPILED_DIR"
+          set -o pipefail
+          apktool d -f "input/original/$APK_NAME" -o "$DECOMPILED_DIR" 2>&1 | tee build/decompile.log
 
       - name: Replace Find Phone audio
         run: |
-          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.ogg
+          set -o pipefail
+          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.ogg 2>&1 | tee build/replace_find_phone_sound.log
 
       - name: Build unsigned APK
         run: |
-          bash scripts/build_huawei_health.sh
+          set -o pipefail
+          bash scripts/build_huawei_health.sh 2>&1 | tee build/build_unsigned.log
 
       - name: Align APK
         run: |
@@ -99,6 +102,35 @@ jobs:
         run: |
           apksigner verify --verbose "$SIGNED_APK"
           sha256sum "$UNSIGNED_APK" "$ALIGNED_APK" "$SIGNED_APK" > build/SHA256SUMS.txt
+
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p build/diagnostics
+          if [ -f "$DECOMPILED_DIR/AndroidManifest.xml" ]; then
+            sed -n "1,200p" "$DECOMPILED_DIR/AndroidManifest.xml" > build/diagnostics/AndroidManifest.head.xml || true
+          fi
+          if [ -f "$DECOMPILED_DIR/apktool.yml" ]; then
+            cp "$DECOMPILED_DIR/apktool.yml" build/diagnostics/apktool.yml || true
+          fi
+          if [ -d "$DECOMPILED_DIR/res/raw" ]; then
+            find "$DECOMPILED_DIR/res/raw" -maxdepth 1 -type f | sort > build/diagnostics/raw-files.txt || true
+          fi
+          if [ -d "$DECOMPILED_DIR" ]; then
+            find "$DECOMPILED_DIR" -maxdepth 2 -type d | sort > build/diagnostics/tree-dirs.txt || true
+          fi
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: huawei-health-build-logs
+          if-no-files-found: warn
+          path: |
+            build/decompile.log
+            build/replace_find_phone_sound.log
+            build/build_unsigned.log
+            build/diagnostics/**
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
