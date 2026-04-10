@@ -2,54 +2,25 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DECOMPILED_DIR="$ROOT_DIR/work/huawei_health_apktool"
-RAW_DIR="$DECOMPILED_DIR/res/raw"
-BACKUP_DIR="$ROOT_DIR/backups/find_phone"
+PATCH_SCRIPT="$ROOT_DIR/scripts/patch_find_phone_apk.py"
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: $0 <input-audio> [second-audio]"
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "Usage: $0 <source-apk> <output-apk> <input-audio> [second-audio]"
   echo
-  echo "If only one input is provided, it is written to both OGG targets."
-  echo "If two inputs are provided, the first replaces zh and the second replaces non-zh."
+  echo "If only one input audio is provided, it is written to both OGG targets."
+  echo "If two input audios are provided, the first replaces zh and the second replaces non-zh."
   exit 1
 fi
 
-resolve_target() {
-  local numeric_stem="$1"
-  local fallback_name="$2"
-  local candidate=""
+SOURCE_APK="$1"
+OUTPUT_APK="$2"
+INPUT_ZH="$3"
+INPUT_INTL="${4:-$3}"
+TMP_DIR="$(mktemp -d)"
+TMP_ZH="$TMP_DIR/find_phone_zh.ogg"
+TMP_INTL="$TMP_DIR/find_phone_intl.ogg"
 
-  shopt -s nullglob
-  for candidate in     "$RAW_DIR/$numeric_stem"     "$RAW_DIR/$numeric_stem".*     "$RAW_DIR/$fallback_name"     "$RAW_DIR/$fallback_name".*; do
-    if [[ -f "$candidate" ]]; then
-      echo "$candidate"
-      shopt -u nullglob
-      return 0
-    fi
-  done
-  shopt -u nullglob
-  return 1
-}
-
-TARGET_ZH="$(resolve_target 2131886230 xjm.ogg || true)"
-TARGET_INTL="$(resolve_target 2131886231 xjn.ogg || true)"
-
-mkdir -p "$BACKUP_DIR"
-
-if [[ -z "$TARGET_ZH" || -z "$TARGET_INTL" ]]; then
-  echo "Find Phone target files are missing. Expected candidates included:" >&2
-  echo "  $RAW_DIR/2131886230(.ext) or $RAW_DIR/xjm.ogg" >&2
-  echo "  $RAW_DIR/2131886231(.ext) or $RAW_DIR/xjn.ogg" >&2
-  echo "Available raw files near expected names:" >&2
-  ls -1 "$RAW_DIR" | sort | grep -E '^(213188623[0-4]|xj[mn](\.ogg)?)$' >&2 || true
-  exit 1
-fi
-
-BACKUP_ZH="$BACKUP_DIR/$(basename "$TARGET_ZH").bak"
-BACKUP_INTL="$BACKUP_DIR/$(basename "$TARGET_INTL").bak"
-
-cp -f "$TARGET_ZH" "$BACKUP_ZH"
-cp -f "$TARGET_INTL" "$BACKUP_INTL"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 write_ogg() {
   local input_file="$1"
@@ -70,23 +41,30 @@ write_ogg() {
         exit 1
       fi
 
-      ffmpeg -y -i "$input_file"         -vn         -c:a libvorbis         -q:a 5         "$output_file" >/dev/null 2>&1
+      ffmpeg -y -i "$input_file" \
+        -vn \
+        -c:a libvorbis \
+        -q:a 5 \
+        "$output_file" >/dev/null 2>&1
       ;;
   esac
 }
 
-write_ogg "$1" "$TARGET_ZH"
-
-if [[ $# -eq 2 ]]; then
-  write_ogg "$2" "$TARGET_INTL"
-else
-  write_ogg "$1" "$TARGET_INTL"
+if [[ ! -f "$SOURCE_APK" ]]; then
+  echo "Source APK not found: $SOURCE_APK" >&2
+  exit 1
 fi
 
-echo "Updated:"
-echo "  $TARGET_ZH"
-echo "  $TARGET_INTL"
-echo
-echo "Backups:"
-echo "  $BACKUP_ZH"
-echo "  $BACKUP_INTL"
+if [[ ! -f "$PATCH_SCRIPT" ]]; then
+  echo "Patch script not found: $PATCH_SCRIPT" >&2
+  exit 1
+fi
+
+write_ogg "$INPUT_ZH" "$TMP_ZH"
+write_ogg "$INPUT_INTL" "$TMP_INTL"
+
+python3 "$PATCH_SCRIPT" \
+  --source-apk "$SOURCE_APK" \
+  --output-apk "$OUTPUT_APK" \
+  --zh-audio "$TMP_ZH" \
+  --intl-audio "$TMP_INTL"

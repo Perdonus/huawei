@@ -24,7 +24,6 @@ jobs:
       APK_URL: https://trashbox.ru/files20/2461088_b0a65e/com.huawei.health-1600102310_hw.apk
       APK_NAME: com.huawei.health-16.1.2.310.apk
       SOURCE_SHA256: 5b7d162abfd2979108672c2b11b063f0c848f4fe60070f41df2e8e26464e54b8
-      DECOMPILED_DIR: work/huawei_health_apktool
       UNSIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-unsigned.apk
       ALIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-aligned.apk
       SIGNED_APK: build/com.huawei.health-16.1.2.310-rebuilt-signed.apk
@@ -33,7 +32,6 @@ jobs:
       KEYSTORE_PASS: android
       KEY_PASS: android
       BUILD_TOOLS_VERSION: 35.0.0
-      APKTOOL_URL: https://github.com/iBotPeaches/Apktool/releases/download/v2.7.0/apktool_2.7.0.jar
 
     steps:
       - name: Checkout repository
@@ -55,15 +53,6 @@ jobs:
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           echo "$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION" >> "$GITHUB_PATH"
 
-      - name: Install apktool
-        run: |
-          mkdir -p "$HOME/.local/bin"
-          curl -L --fail "$APKTOOL_URL" -o "$HOME/.local/bin/apktool.jar"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec java -jar "$HOME/.local/bin/apktool.jar" "$@"' > "$HOME/.local/bin/apktool"
-          chmod +x "$HOME/.local/bin/apktool"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/apktool" --version
-
       - name: Download original APK
         run: |
           mkdir -p build input/original
@@ -71,20 +60,13 @@ jobs:
           echo "$SOURCE_SHA256  input/original/$APK_NAME" | sha256sum -c -
           sha256sum "input/original/$APK_NAME" | tee build/source-apk.sha256
 
-      - name: Decompile APK
-        run: |
-          set -o pipefail
-          apktool d -f "input/original/$APK_NAME" -o "$DECOMPILED_DIR" 2>&1 | tee build/decompile.log
-
       - name: Replace Find Phone audio
         run: |
           set -o pipefail
-          bash scripts/replace_find_phone_sound.sh assets/custom/find_phone.ogg 2>&1 | tee build/replace_find_phone_sound.log
-
-      - name: Build unsigned APK
-        run: |
-          set -o pipefail
-          bash scripts/build_huawei_health.sh 2>&1 | tee build/build_unsigned.log
+          bash scripts/replace_find_phone_sound.sh \
+            "input/original/$APK_NAME" \
+            "$UNSIGNED_APK" \
+            assets/custom/find_phone.ogg 2>&1 | tee build/replace_find_phone_sound.log
 
       - name: Align APK
         run: |
@@ -107,17 +89,17 @@ jobs:
         if: failure()
         run: |
           mkdir -p build/diagnostics
-          if [ -f "$DECOMPILED_DIR/AndroidManifest.xml" ]; then
-            sed -n "1,200p" "$DECOMPILED_DIR/AndroidManifest.xml" > build/diagnostics/AndroidManifest.head.xml || true
+          if [ -f "input/original/$APK_NAME" ]; then
+            unzip -l "input/original/$APK_NAME" | grep -E 'res/raw/(xjm|xjn|2131886230|2131886231)\.ogg|META-INF/' \
+              > build/diagnostics/original-apk-entries.txt || true
           fi
-          if [ -f "$DECOMPILED_DIR/apktool.yml" ]; then
-            cp "$DECOMPILED_DIR/apktool.yml" build/diagnostics/apktool.yml || true
+          if [ -f "$UNSIGNED_APK" ]; then
+            unzip -l "$UNSIGNED_APK" | grep -E 'res/raw/(xjm|xjn|2131886230|2131886231)\.ogg|META-INF/' \
+              > build/diagnostics/unsigned-apk-entries.txt || true
           fi
-          if [ -d "$DECOMPILED_DIR/res/raw" ]; then
-            find "$DECOMPILED_DIR/res/raw" -maxdepth 1 -type f | sort > build/diagnostics/raw-files.txt || true
-          fi
-          if [ -d "$DECOMPILED_DIR" ]; then
-            find "$DECOMPILED_DIR" -maxdepth 2 -type d | sort > build/diagnostics/tree-dirs.txt || true
+          if [ -f "$ALIGNED_APK" ]; then
+            unzip -l "$ALIGNED_APK" | grep -E 'res/raw/(xjm|xjn|2131886230|2131886231)\.ogg|META-INF/' \
+              > build/diagnostics/aligned-apk-entries.txt || true
           fi
 
       - name: Upload failure diagnostics
@@ -127,9 +109,7 @@ jobs:
           name: huawei-health-build-logs
           if-no-files-found: warn
           path: |
-            build/decompile.log
             build/replace_find_phone_sound.log
-            build/build_unsigned.log
             build/diagnostics/**
 
       - name: Upload build artifacts

@@ -2,6 +2,10 @@
 
 Repository: `git@github.com:Perdonus/huawei.git`
 
+Build/verification policy:
+- Use GitHub Actions only for APK patching, alignment, signing, and verification.
+- Do not rely on local rebuild or verification loops.
+
 Original APK:
 - `input/original/com.huawei.health-16.1.2.310.apk`
 - SHA-256: `5b7d162abfd2979108672c2b11b063f0c848f4fe60070f41df2e8e26464e54b8`
@@ -52,19 +56,22 @@ Current file sizes:
 
 ## Replacement strategy
 
-When the custom sound is added to the repo, replace both files:
+The reliable path for this APK is to patch the original archive directly instead of rebuilding with apktool.
 
-- `work/huawei_health_apktool/res/raw/2131886230.ogg`
-- `work/huawei_health_apktool/res/raw/2131886231.ogg`
+Replace both Find Phone resources in the original APK:
+
+- `res/raw/xjm.ogg`
+- `res/raw/xjn.ogg`
+
+Fallback names seen in older apktool output:
+
+- `res/raw/2131886230.ogg`
+- `res/raw/2131886231.ogg`
 
 Using the same audio for both is the simplest path unless separate Chinese/non-Chinese sounds are needed.
 
-## Build path
+After patching the archive:
 
-Rebuild from the decompiled tree with:
-
-```bash
-apktool b work/huawei_health_apktool -o build/com.huawei.health-16.1.2.310-rebuilt-unsigned.apk
-```
-
-Then sign the rebuilt APK before installation.
+- align with `zipalign`
+- sign with `apksigner`
+- verify on GitHub Actions
